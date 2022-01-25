@@ -1,0 +1,97 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <!-- Inject this into the existing Docker publish targets in the SDK -->
+        <DockerPublishDependsOn>
+            $(DockerPublishDependsOn);
+            JibImageBuild
+        </DockerPublishDependsOn>
+        <_JibBinaryPath>$(MSBuildThisFileDirectory)../jib</_JibBinaryPath>
+        <_JibPath Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(_JibBinaryPath)/bin/jib.bat</_JibPath>
+        <_JibPath Condition="'$(_JibPath)' == ''">$(_JibBinaryPath)/bin/jib</_JibPath>
+        <_JibPath>$([System.IO.Path]::GetFullPath($(_JibPath)))</_JibPath>
+        <_JRERootPath>$(MSBuildThisFileDirectory)../jre</_JRERootPath>
+        <_JavaPath>$(_JRERootPath)/bin/java.exe</_JavaPath>
+    </PropertyGroup>
+
+    <Target Name="DetermineImageProperties" BeforeTargets="CreateJibImageFile">
+        <PropertyGroup>
+            <_BaseImage>$(BaseImage)</_BaseImage>
+            <!-- TODO: detect ASP.NET vs normal NET app and change base image appropriately -->
+            <!-- TODO: detect ideal OS/image architecture and change base image appropriately -->
+            <_BaseImage Condition="'$(_BaseImage)' == ''">mcr.microsoft.com/dotnet/aspnet:$(_TargetFrameworkVersionWithoutV)</_BaseImage>
+            <_ImageTag>$(PublishImageTag)</_ImageTag>
+            <_ImageTag Condition="'$(_ImageTag)' == ''">latest</_ImageTag>
+            <!-- Let users specify their registry -->
+            <_ImageTarget>$(RegistryUrl)</_ImageTarget>
+            <!-- But default to local docker socket -->
+            <_ImageTarget Condition="'$(_ImageTarget)' == ''">docker://</_ImageTarget>
+            <!-- Ensure trailing slash for easier construction of the full image name -->
+            <_ImageTarget Condition="$(_ImageTarget.EndsWith('/')) != true">$(_ImageTarget)/</_ImageTarget>
+            <!-- trim any leading http(s):// to ensure we have a valid repository name -->
+            <_ImageTarget>$(_ImageTarget.TrimStart('https://'))</_ImageTarget>
+            <_ImageTarget>$(_ImageTarget.TrimStart('http://'))</_ImageTarget>
+            <!-- Construct the full image name -->
+            <_FullImageName>$(_ImageTarget)$(ProjectName):$(_ImageTag)</_FullImageName>
+        </PropertyGroup>
+    </Target>
+
+    <Target Name="CreateJibImageFile" BeforeTargets="JibImageBuild">
+        <PropertyGroup>
+            <_JibBuildFile>$(IntermediateOutputPath)jib.yaml</_JibBuildFile>
+            <_JibBuildTime>$([System.DateTime]::UtcNow.ToString("o"))</_JibBuildTime>
+            <!-- TODO: allow for customizing this directory-->
+            <_JibWorkingDirectory>/app</_JibWorkingDirectory>
+            <_JibEntryPoint>$(_JibWorkingDirectory)/$(ProjectName)</_JibEntryPoint>
+            <_JibFileLines>
+apiVersion: jib/v1alpha1
+kind: BuildFile
+from:
+  image: "$(_BaseImage)"
+creationTime: "$(_JibBuildTime)"
+workingDirectory: "$(_JibWorkingDirectory)"
+entrypoint: ["$(_JibEntryPoint)"]
+exposedPorts:
+- 80
+- 443
+layers:
+  properties:
+    filePermissions: 755
+  entries:
+  - name: application
+    files:
+    - src: $(PublishDir)
+      includes:
+      - $(PublishDir)
+      dest: $(_JibWorkingDirectory)
+            </_JibFileLines>
+        </PropertyGroup>
+
+        <WriteLinesToFile File="$(_JibBuildFile)" Lines="$(_JibFileLines)" Overwrite="true" />
+        <!-- TODO: use file writes so that this file is cleaned up -->
+        <!-- <FileWrites Include="$(_JibBuildFile)" /> -->
+    </Target>
+
+    <Target Name="JibImageBuild">
+        <PropertyGroup>
+
+
+            <_JibTarget>$(_FullImageName)</_JibTarget>
+
+            <!-- Jib-specific execution variables -->
+            <_JibEnvVar>JAVA_HOME=$(_JRERootPath)</_JibEnvVar>
+            <_JibEnvVar>ES_JAVA_OPTS="-Dsun.stdout.encoding=UTF-8 -Dsun.err.encoding=UTF-8"</_JibEnvVar>
+        </PropertyGroup>
+
+        <Message Text="Building container image with Jib..." />
+
+        <!-- very simple target to invoke jib, but you can start to see how we might make this more productionalized... -->
+        <Exec Command="$(_JibPath) build --build-file=$(_JibBuildFile) --target=$(_JibTarget)" ConsoleToMsBuild="true" CustomWarningRegularExpression="\[WARN\]" CustomErrorRegularExpression="\[ERROR\]" IgnoreStandardErrorWarningFormat="true" EchoOff="false" EnvironmentVariables="$(_JibEnvVar)">
+            <Output TaskParameter="ConsoleOutput" ItemName="JibOutput" />
+        </Exec>
+
+        <!-- TODO: Set output variables that other VS tooling needs (full image url/identifier, etc) -->
+    </Target>
+
+    <!-- This is a dummy target because the SDK-included Docker publish profile hard-codes the existence of the target. -->
+    <Target Name="DockerComposeBuild" />
+</Project>

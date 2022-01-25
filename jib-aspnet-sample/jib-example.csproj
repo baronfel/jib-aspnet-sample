@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <!-- <RuntimeIdentifier>alpine-x64</RuntimeIdentifier> -->
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>jib_example</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <JibPath>C:\Users\chethusk\Downloads\jib-jre-0.9.0\jib-0.9.0\bin\jib.bat</JibPath>
+  </PropertyGroup>
+  
+  <!-- Only include minified assets in release mode, this lowers the contianer size by ~3MB  -->
+  <ItemGroup Condition="'$(Configuration)' == 'Release'">
+    <Content Update="wwwroot\**\*.css" CopyToPublishDirectory="never" />
+    <Content Update="wwwroot\**\*.min.css" CopyToPublishDirectory="always" />
+    <Content Update="wwwroot\**\*.js" CopyToPublishDirectory="never" />
+    <Content Update="wwwroot\**\*.min.js" CopyToPublishDirectory="always" />
+ </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.2.3" />
+  </ItemGroup>
+
+ <!-- very simple target to invoke jib, but you can start to see how we might make this more productionalized... -->
+ <Target Name="JibPublish" BeforeTargets="AfterPublish">
+    <PropertyGroup>
+      <_ImageTag>$(ProjectName):$(Version)</_ImageTag>
+      <_JibPath Condition="'$(JibPath)' == ''">C:\Users\chethusk\Downloads\jib-jre-0.9.0\jib-0.9.0\bin\jib.bat</_JibPath>
+      <_JibPath Condition="'$(JibPath)' != ''">$(JibPath)</_JibPath>
+      <_JibTarget>docker://$(_ImageTag)</_JibTarget>
+      <_JibBuildFile>jib.yaml</_JibBuildFile>
+      <_JibBuildFile Condition="'$(JibBuildFile)' != ''">$(JibBuildFile)</_JibBuildFile>
+    </PropertyGroup>
+    <Exec Command="$(_JibPath) build --build-file=$(_JibBuildFile) --target=$(_JibTarget)" ConsoleToMsBuild="true" CustomWarningRegularExpression="\[WARN\]" CustomErrorRegularExpression="\[ERROR\]" IgnoreStandardErrorWarningFormat="true"
+    EchoOff="false">
+        <Output TaskParameter="ConsoleOutput" ItemName="JibOutput" />
+      </Exec>
+ </Target>
+</Project>

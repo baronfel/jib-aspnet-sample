@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Version>0.0.1</Version>
+    <JibPath>C:\ProgramData\chocolatey\lib\jib\content\jib-0.9.0</JibPath>
+    <JREPath>C:\Program Files\Java\jre1.8.0_321\</JREPath>
+    <NoWarn>NU5100</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="$(JibPath)/**/*" PackagePath="jib" />
+    <!-- TODO: this is a windows-only x64 JRE. will not work on any other OS -->
+    <Content Include="$(JREPath)/**/*" PackagePath="jre" />
+    <Content Include="build\*" PackagePath="build\" />
+  </ItemGroup>
+</Project>

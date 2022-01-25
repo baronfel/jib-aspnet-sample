@@ -1,0 +1,50 @@
+# required apiVersion and kind, for compatibility over versions of the cli
+apiVersion: jib/v1alpha1
+kind: BuildFile
+
+# full base image specification with detail for manifest lists or multiple architectures
+from:
+  image: "mcr.microsoft.com/dotnet/aspnet:6.0.1-alpine3.14-amd64"
+
+# creation time sets the creation time of the container only
+# can be: millis since epoch (ex: 1000) or an ISO 8601 creation time (ex: 2020-06-08T14:54:36+00:00)
+creationTime: "2022-01-24T00:00:00+00:00"
+
+workingDirectory: "/app"
+
+entrypoint: ["/app/jib-example"]
+
+exposedPorts: 
+- 80
+
+layers:
+  properties:
+    filePermissions: 755
+  entries:
+  - name: dependencies
+    files:
+      - src: bin/Release/net6.0/alpine-x64/publish
+        dest: /app
+        includes:
+        - "./bin/Release/net6.0/alpine-x64/publish/Microsoft.OpenApi.dll"
+        - "./bin/Release/net6.0/alpine-x64/publish/Swashbuckle.AspNetCore.Swagger.dll"
+        - "./bin/Release/net6.0/alpine-x64/publish/Swashbuckle.AspNetCore.SwaggerGen.dll"
+        - "./bin/Release/net6.0/alpine-x64/publish/Swashbuckle.AspNetCore.SwaggerUI.dll"
+  - name: configs
+    files:
+      - src: bin/Release/net6.0/alpine-x64/publish
+        includes:
+        - "./bin/Release/net6.0/alpine-x64/publish/appsettings*"
+        dest: /app
+  - name: "static assets"
+    files:
+      - src: bin/Release/net6.0/alpine-x64/publish
+        includes:
+        - "./bin/Release/net6.0/alpine-x64/publish/wwwroot/"
+        dest: /app
+  - name: app
+    files:
+      - src: bin/Release/net6.0/alpine-x64/publish
+        includes:
+        - "./bin/Release/net6.0/alpine-x64/publish/jib-example*"
+        dest: /app
