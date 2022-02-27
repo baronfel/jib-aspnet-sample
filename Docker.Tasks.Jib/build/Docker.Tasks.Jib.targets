@@ -28,10 +28,16 @@
             <!-- Ensure trailing slash for easier construction of the full image name -->
             <_ImageTarget Condition="$(_ImageTarget.EndsWith('/')) != true">$(_ImageTarget)/</_ImageTarget>
             <!-- trim any leading http(s):// to ensure we have a valid repository name -->
-            <_ImageTarget>$(_ImageTarget.TrimStart('https://'))</_ImageTarget>
-            <_ImageTarget>$(_ImageTarget.TrimStart('http://'))</_ImageTarget>
+            <_ImageTarget Condition="$(_ImageTarget.StartsWith('https://')" >$(_ImageTarget.TrimStart('https://'))</_ImageTarget>
+            <_ImageTarget Condition="$(_ImageTarget.StartsWith('http://')">$(_ImageTarget.TrimStart('http://'))</_ImageTarget>
+            <!-- Allow for customization -->
+            <_ImageName>$(ImageName)</_ImageName>
+            <!-- default to project name though -->
+            <_ImageName Condition="'$(_ImageName)' == ''">$(ProjectName)</_ImageName>
+            <!-- images must be lowercased, so we ensure that here -->
+            <_ImageName>$(_ImageName.ToLowerInvariant())</_ImageName>
             <!-- Construct the full image name -->
-            <_FullImageName>$(_ImageTarget)$(ProjectName):$(_ImageTag)</_FullImageName>
+            <_FullImageName>$(_ImageTarget)$(_ImageName):$(_ImageTag)</_FullImageName>
         </PropertyGroup>
     </Target>
 
