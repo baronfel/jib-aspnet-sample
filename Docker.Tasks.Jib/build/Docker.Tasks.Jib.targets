@@ -13,6 +13,7 @@
         <_JavaPath>$(_JRERootPath)/bin/java.exe</_JavaPath>
     </PropertyGroup>
 
+
     <Target Name="DetermineImageProperties" BeforeTargets="CreateJibImageFile">
         <PropertyGroup>
             <_BaseImage>$(BaseImage)</_BaseImage>
@@ -28,8 +29,8 @@
             <!-- Ensure trailing slash for easier construction of the full image name -->
             <_ImageTarget Condition="$(_ImageTarget.EndsWith('/')) != true">$(_ImageTarget)/</_ImageTarget>
             <!-- trim any leading http(s):// to ensure we have a valid repository name -->
-            <_ImageTarget Condition="$(_ImageTarget.StartsWith('https://')" >$(_ImageTarget.TrimStart('https://'))</_ImageTarget>
-            <_ImageTarget Condition="$(_ImageTarget.StartsWith('http://')">$(_ImageTarget.TrimStart('http://'))</_ImageTarget>
+            <_ImageTarget Condition="$(_ImageTarget.StartsWith('https://'))">$(_ImageTarget.Substring(8))</_ImageTarget>
+            <_ImageTarget Condition="$(_ImageTarget.StartsWith('http://'))">$(_ImageTarget.Substring(7))</_ImageTarget>
             <!-- Allow for customization -->
             <_ImageName>$(ImageName)</_ImageName>
             <!-- default to project name though -->
@@ -77,10 +78,29 @@ layers:
         <!-- <FileWrites Include="$(_JibBuildFile)" /> -->
     </Target>
 
+    <Target Name="DetermineAuth" BeforeTargets="JibImageBuild" AfterTargets="DetermineImageProperties" Condition="$(_ImageTarget.StartsWith('docker://')) != true">
+        <PropertyGroup>
+            <_ImageDomain>$(_ImageTarget)</_ImageDomain>
+        </PropertyGroup>
+        <!-- Use the az cli to get an access token viable for push/pull from the registry -->
+        <Exec Command="az acr login --name $(_ImageDomain) --expose-token" ConsoleToMsBuild="true" EchoOff="true" IgnoreStandardErrorWarningFormat="true" StandardOutputImportance="low" StandardErrorImportance="low">
+            <Output TaskParameter="ConsoleOutput" ItemName="_AcrCredentialJson" />
+        </Exec>
+        <PropertyGroup>
+            <!-- Gross json manipulation here - we need to get the accessToken property and then trimming garbage -->
+            <_Concat>@(_AcrCredentialJson, ' ')</_Concat>
+            <_MatchJson>$([System.Text.RegularExpressions.Regex]::Match($(_Concat), '\"accessToken\":\s+\"(.+)\",'))</_MatchJson>
+            <_MatchJson2>$(_MatchJson.Substring(16))</_MatchJson2>
+            <_MatchJson3>$(_MatchJson2.TrimEnd(','))</_MatchJson3>
+            <_MatchJson4>$(_MatchJson3.TrimEnd('\"'))</_MatchJson4>
+            <_ImageTargetPassword>$(_MatchJson4)</_ImageTargetPassword>
+            <!-- For token auth, use a GUID of all zeros for ACR, see https://github.com/google/go-containerregistry/issues/421#issuecomment-478186079 -->
+            <_ImageTargetUserName>00000000-0000-0000-0000-000000000000</_ImageTargetUserName>
+        </PropertyGroup>
+    </Target>
+
     <Target Name="JibImageBuild">
         <PropertyGroup>
-
-
             <_JibTarget>$(_FullImageName)</_JibTarget>
 
             <!-- Jib-specific execution variables -->
@@ -91,7 +111,7 @@ layers:
         <Message Text="Building container image with Jib..." />
 
         <!-- very simple target to invoke jib, but you can start to see how we might make this more productionalized... -->
-        <Exec Command="$(_JibPath) build --build-file=$(_JibBuildFile) --target=$(_JibTarget)" ConsoleToMsBuild="true" CustomWarningRegularExpression="\[WARN\]" CustomErrorRegularExpression="\[ERROR\]" IgnoreStandardErrorWarningFormat="true" EchoOff="false" EnvironmentVariables="$(_JibEnvVar)">
+        <Exec Command="$(_JibPath) build --build-file=$(_JibBuildFile) --target=$(_JibTarget) --to-username=$(_ImageTargetUserName) --to-password=$(_ImageTargetPassword) --verbosity info" ConsoleToMsBuild="true" CustomWarningRegularExpression="\[WARN\]" CustomErrorRegularExpression="\[ERROR\]" IgnoreStandardErrorWarningFormat="true" EchoOff="false" EnvironmentVariables="$(_JibEnvVar)">
             <Output TaskParameter="ConsoleOutput" ItemName="JibOutput" />
         </Exec>
 
